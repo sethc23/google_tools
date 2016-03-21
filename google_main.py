@@ -7,11 +7,21 @@ except:
 
 class Google:
 
-    def __init__(self,_parent=None):
+    def __init__(self,_parent=None,**kwargs):
         from os                             import environ                  as os_environ
         from sys                            import path                     as py_path
         py_path.append(                         os_environ['HOME'] + '/.scripts')
-        if _parent:            self._parent =   _parent
+        
+        # SEE file_server for latest implementation
+
+        if _parent:            
+            self._parent                    =   _parent
+            if hasattr(_parent,'T'):
+                self.T                      =   _parent.T
+            if hasattr(_parent,'PG'):
+                self.PG                     =   _parent.PG
+
+
         if not _parent or not hasattr(_parent,'T'):
             from System_Control                 import System_Lib
             self.T                          =   System_Lib().T
@@ -19,36 +29,11 @@ class Google:
             self.T                          =   _parent.T
             from System_Control                 import System_Reporter
             self.Reporter                   =   System_Reporter(self)
-        locals().update(                        self.T.__dict__)
-        # self.Google                         =   self
-        # self.Voice                          =   self.Voice(self)
-        # self.Gmail                          =   self.Gmail(self)
 
-    class Voice:
 
-        def __init__(self,_parent):
-            self._parent                    =   _parent
-            self.T                          =   _parent.T
-            # self.Voice                      =   self
-            from googlevoice                import Voice
-            from googlevoice.util           import input
-            self.Voice                      =   Voice()
-            self.Voice.login(                   )
-
-        def _msg(self,phone_num,msg):
-            # _out                        =   self.Voice.send_sms(phone_num, msg)
-            # assert _out==None
-            return
-
-    class Gmail:
-
-        def __init__(self,_parent,**kwargs):
-            self._parent                    =   _parent
-            self.T                          =   _parent.T
-
-            for k in kwargs.keys():
-                if k in ['username','pw']:
-                    self.T.update(              {k: kwargs[k]})
+        for k in kwargs.keys():
+            if k in ['username','pw']:
+                self.T.update(                  {k: kwargs[k]})
 
             if not hasattr(self.T,'username') or not hasattr(self.T,'pw'):
                 from __settings__ import default_user,default_pw
@@ -58,24 +43,72 @@ class Google:
                 self.username                   =   self.T.username
                 self.pw                         =   self.T.pw
 
-            from os.path                    import getsize                  as os_getsize
-            from os.path                    import exists as os_path_exists
-            import                              datetime                    as DT
-            import                              time
-            import                              gmail_client                as GC
-            self.T.py_path.append(              self.T.os_environ['BD'] + '/files_folders')
-            from API_system                 import get_input
 
-            attachments_path                =   self.T.os_environ['HOME'] + '/.gmail/attachments/'
-            if not os_path_exists(              attachments_path):
-                self.T.os_mkdir(                attachments_path)
+        if self.T.config.gmail._has_key('attachments_dir'):
+                attachments_path            =   self.T.config.gmail.attachments_dir.replace('~/','%s/' % self.T.os.environ['HOME'])
+        else:
+            attachments_path                =   self.T.os.environ['HOME'] + '/.gmail/attachments/'
+        if not self.T.os.path.exists(           attachments_path):
+            self.T.os.mkdir(                    attachments_path)
+
+
+        self.T                              =   self.T.To_Class_Dict(  self,
+                                                                dict_list=[self.T.__dict__,locals()],
+                                                                update_globals=True)
+        self.Google                         =   self
+        self.Voice                          =   self.Voice(self)
+        self.Gmail                          =   self.Gmail(self)
+
+    def _get_input(question):
+        return raw_input(question)
+
+    class Voice:
+
+        def __init__(self,_parent):
+
+            self                            =   _parent.T.To_Sub_Classes(self,_parent)
+
+            # self._parent                    =   _parent
+            # self.T                          =   _parent.T
+
+            # self.Voice                      =   self
+            # from googlevoice                import Voice
+            # from googlevoice.util           import input
+            # self.Voice                      =   Voice()
+            # self.Voice.login(                   )
+
+        def _msg(self,phone_num,msg):
+            # _out                        =   self.Voice.send_sms(phone_num, msg)
+            # assert _out==None
+            return
+
+    class Gmail:
+
+        def __init__(self,_parent,**kwargs):
+            import                              gmail_client                as GC
+            import                              codecs
+
+            self                            =   _parent.T.To_Sub_Classes(self,_parent)
+            if hasattr(_parent,'PG'):
+                self.PG                     =   _parent.PG
+            
+            # self._parent                    =   _parent
+            # self.T                          =   _parent.T
 
             all_imports                     =   locals().keys()
             excludes                        =   ['self','_parent']
-            for k in all_imports:
-                if not excludes.count(k):
-                    self.T.update(              {k                          :   eval(k) })
+            new_imports                     =   [it for it in all_imports if not excludes.count(it)]
+            for k in new_imports:
+                self.T.update(                  {k:locals()[k]} )
             globals().update(                   self.T.__dict__)
+
+
+        def _run_cmd(cmd):
+            p = self.T.sub_popen(cmd,stdout=self.T.sub_PIPE,
+                                 shell=True,executable='/bin/zsh')
+            (_out,_err) = p.communicate()
+            assert _err is None
+            return _out.rstrip('\n')
 
         def _make_pgsql_tbl(self):
             cmd = """
@@ -124,19 +157,24 @@ class Google:
                                                 'ascii','ignore')
 
             if D.has_key('attachments'):
+                'md5sum -b /home/ub2/.gmail/attachments/%(_key)s | cut -d \  -f1'
                 attachment_json         =   []
                 for A in msg.attachments:
 
                     attach_id           =   str(self.T.get_guid().hex)
-                    AD                  =   dict({  attach_id       : {'name'           :   A.name,
-                                                                       'size_in_kb'     :   A.size,
-                                                                       'content_type'   :   A.content_type}})
-                    attachment_json.append(AD)
+                    file_dict           =   {'name'           :   A.name,
+                                             'size_in_kb'     :   A.size,
+                                             'content_type'   :   A.content_type}
+                    
                     if A.size > 0:
                         f_path          =   self.T.attachments_path + attach_id
                         A.save(             f_path)
-                        saved_size      =   self.T.os_getsize(f_path)
+                        file_dict.update(   {'md5' : run_cmd('md5sum -b %s | cut -d \  -f1' % f_path) })
+                        saved_size      =   self.T.os.path.getsize(f_path)
                         assert saved_size==A.size
+
+                    AD                  =   dict({  attach_id       : file_dict })
+                    attachment_json.append( AD)
 
                 D['attachments']        =   attachment_json
             else:
@@ -156,7 +194,7 @@ class Google:
         #             print 'unexpected data type in msg class'
         #             raise SystemError
 
-            return self.T.j_dump(           D, ensure_ascii=False)
+            return self.T.json.dumps(           D, ensure_ascii=False)
 
         def misc_queries(self):
             a="""
@@ -181,51 +219,27 @@ class Google:
                 limit 5
             """
 
-        def all_mail(self):
+        def all_mail(self,method='full'):
             """Copy all messages to pgsql@system:gmail"""
             import json as J
-            import yaml
             from re import sub as re_sub
 
-            import ipdb as I; I.set_trace()
+            def check_setup(method='full'):
 
-            start                       =   self.T.time.time()
+                if method=='full':
+                    if not self.PG.F.tables_exists('gmail'):
+                        self.PG.F.functions_create_batch_groups(sub_dir='sql_exts',
+                                                                grps=['gmail_tables'],
+                                                                files=['1_gmail.sql'])
 
-            g                           =   self.T.GC.login(self.username, self.pw)
-            all_mail                    =   g.all_mail().mail()
+                elif method=='quick':
+                    if not self.PG.F.tables_exists('gmail_chk'):
+                        self.PG.F.functions_create_batch_groups(sub_dir='sql_exts',
+                                                                grps=['gmail_tables'],
+                                                                files=['2_gmail_chk.sql'])
 
-            # CONFIRM gmail table exists
-            qry                         =   """ select count(*)>0 c from information_schema.tables
-                                                WHERE table_name = 'gmail'
-                                            """
-            if not self.T.pd.read_sql(qry,self.T.sys_eng).c[0]==True:
-                self._make_pgsql_tbl(       )
+            def full_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids):
 
-
-            # START PROCESSING FROM WHERE PREVIOUS PROCESSING ENDED
-            df                          =   self.T.pd.DataFrame(data={'msg':all_mail})
-            df['g_uid']                 =   df.msg.map(lambda m: int(m.uid))
-
-            qry                         =   "select all_mail_uid from gmail"
-            pdf                         =   self.T.pd.read_sql(qry,self.T.sys_eng)
-            pg_all_mail_uids            =   pdf.all_mail_uid.tolist()
-
-            df['skip']                  =   df.g_uid.isin(pg_all_mail_uids)
-
-            remaining_msgs              =   df[df.skip==False].msg.tolist()
-
-            m                           =   self._fetch_msg_grp(remaining_msgs,25)
-
-            while True:
-                try:
-                    msg_grp                 =   m.next()
-                except StopIteration:
-                    break
-                msg_num                 =   len(msg_grp)
-                msgs_as_dict            =   map(lambda m: m.__dict__,msg_grp)
-                all_mail_uids           =   map(lambda m: m.uid, msg_grp)
-                g_msg_ids               =   map(lambda m: int(m['message_id']),msgs_as_dict)
-                msg_ids                 =   map(lambda m: self._get_msg_ids(m),msgs_as_dict)
                 msgs_as_json            =   map(lambda m: self._msg_to_json(m),msg_grp)
 
                 cmd                     =   unicode("",encoding='utf8',errors='ignore')
@@ -269,14 +283,106 @@ class Google:
                             )
                         ;
                         """
-                    _out                = upsert % D
-                    _out = re_sub(r'[^\x00-\x7F]+',' ', _out)
+                    _out                =   upsert % D
+                    _out                =   re_sub(r'[^\x00-\x7F]+',' ', _out)
                     cmd                +=   unicode(self.T.codecs.encode(_out,'ascii','ignore'),errors='ignore')
                     # cmd                +=   unicode(upsert,errors='ignore') if type(upsert) is not unicode else upsert
 
 
                 self.T.conn.set_isolation_level(0)
                 self.T.cur.execute(         cmd)
+
+            def quick_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids):
+                cmd                     =   unicode("",encoding='utf8',errors='ignore')
+                for i in range(msg_num):
+                    D                   =   {'all_mail_uid' :   all_mail_uids[i],
+                                             'g_msg_id'     :   g_msg_ids[i],
+                                             'msg_id'       :   msg_ids[i]}
+
+
+                    upsert              =   """
+                        INSERT into gmail_chk (
+                            all_mail_uid,
+                            g_msg_id,
+                            msg_id
+                            )
+                        SELECT %(all_mail_uid)s,%(g_msg_id)s,'%(msg_id)s'
+                        FROM
+                            (
+                            SELECT array_agg(all_mail_uid) all_uids FROM gmail
+                            ) as f1,
+                            (
+                            SELECT array_agg(g_msg_id) all_g_m_ids FROM gmail
+                            ) as f2
+                            -- msg_id ignored as sampling showed such value was not unique to each msg
+                            -- (
+                            -- SELECT array_agg(msg_id) all_m_ids FROM gmail
+                            -- ) as f3
+                        WHERE
+                            (
+                                not all_uids @> array['%(all_mail_uid)s'::bigint]
+                            AND not all_g_m_ids @> array['%(g_msg_id)s'::bigint]
+                            )
+                        OR
+                            (
+                               all_uids is null
+                            OR all_g_m_ids is null
+                            )
+                        ;
+                        """
+                    _out                =   upsert % D
+                    _out                =   re_sub(r'[^\x00-\x7F]+',' ', _out)
+                    cmd                +=   unicode(self.T.codecs.encode(_out,'ascii','ignore'),errors='ignore')
+                    # cmd                +=   unicode(upsert,errors='ignore') if type(upsert) is not unicode else upsert
+
+
+                self.T.conn.set_isolation_level(0)
+                self.T.cur.execute(         cmd)
+
+            import ipdb as I; I.set_trace()
+
+            start                       =   self.T.time.time()
+
+            g                           =   self.T.GC.login(self.username, self.pw)
+            all_mail                    =   g.all_mail().mail()
+
+            # CONFIRM gmail table exists
+            qry                         =   """ select count(*)>0 c from information_schema.tables
+                                                WHERE table_name = 'gmail'
+                                            """
+            if not self.T.pd.read_sql(qry,self.T.eng).c[0]==True:
+                self._make_pgsql_tbl(       )
+
+
+            # START PROCESSING FROM WHERE PREVIOUS PROCESSING ENDED
+            df                          =   self.T.pd.DataFrame(data={'msg':all_mail})
+            df['g_uid']                 =   df.msg.map(lambda m: int(m.uid))
+
+            qry                         =   "select all_mail_uid from gmail"
+            pdf                         =   self.T.pd.read_sql(qry,self.T.eng)
+            pg_all_mail_uids            =   pdf.all_mail_uid.tolist()
+
+            df['skip']                  =   df.g_uid.isin(pg_all_mail_uids)
+
+            remaining_msgs              =   df[df.skip==False].msg.tolist()
+
+            m                           =   self._fetch_msg_grp(remaining_msgs,25)
+
+            while True:
+                try:
+                    msg_grp                 =   m.next()
+                except StopIteration:
+                    break
+                msg_num                 =   len(msg_grp)
+                msgs_as_dict            =   map(lambda m: m.__dict__,msg_grp)
+                all_mail_uids           =   map(lambda m: m.uid, msg_grp)
+                g_msg_ids               =   map(lambda m: int(m['message_id']),msgs_as_dict)
+                msg_ids                 =   map(lambda m: self._get_msg_ids(m),msgs_as_dict)
+
+                
+                full_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
+                quick_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
+            
 
             end                         =   self.T.time.time()
             print 'total time (seconds):',end-start
@@ -455,7 +561,7 @@ class Google:
                                                                                                 int(T['birth_month']),
                                                                                                 int(T['BirthDay'])),})
             details.update(                     {'_gender'              :   gender_dict[ T['gender_num'] ],})
-            T['details']                    =   self.T.j_dump(details)
+            T['details']                    =   self.T.json.dumps(details)
 
             qry                             =   """ INSERT INTO identities (guid,email,pw,details)
                                                     VALUES ('%(guid)s','%(email)s','%(pw)s','%(details)s'::jsonb) """ % T
