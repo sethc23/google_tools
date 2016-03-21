@@ -2,3 +2,6 @@
 gmail/*.txt
 */__pycache__
 *.idea/
+__init__.pyc
+__settings__.pyc
+google_main.pyc

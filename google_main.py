@@ -19,7 +19,7 @@ class Google:
             self.T                          =   _parent.T
             from System_Control                 import System_Reporter
             self.Reporter                   =   System_Reporter(self)
-        locals().update(                        self.T.__getdict__())
+        locals().update(                        self.T.__dict__)
         # self.Google                         =   self
         # self.Voice                          =   self.Voice(self)
         self.Gmail                          =   self.Gmail(self)
@@ -50,7 +50,7 @@ class Google:
                 if k in ['username','pw']:
                     self.T.update(              {k: kwargs[k]})
 
-            if not self.T.has_key('username') or not self.T.has_key('pw'):
+            if not hasattr(self.T,'username') or not hasattr(self.T,'pw'):
                 from __settings__ import default_user,default_pw
                 self.username                   =   default_user
                 self.pw                         =   default_pw
@@ -75,7 +75,7 @@ class Google:
             for k in all_imports:
                 if not excludes.count(k):
                     self.T.update(              {k                          :   eval(k) })
-            globals().update(                   self.T.__getdict__())
+            globals().update(                   self.T.__dict__)
 
         def _make_pgsql_tbl(self):
             cmd = """
@@ -127,7 +127,7 @@ class Google:
                 attachment_json         =   []
                 for A in msg.attachments:
 
-                    attach_id           =   str(self.T.get_guid().hex)[:7]
+                    attach_id           =   str(self.T.get_guid().hex)
                     AD                  =   dict({  attach_id       : {'name'           :   A.name,
                                                                        'size_in_kb'     :   A.size,
                                                                        'content_type'   :   A.content_type}})
@@ -183,7 +183,9 @@ class Google:
 
         def all_mail(self):
             """Copy all messages to pgsql@system:gmail"""
-
+            import json as J
+            import yaml
+            from re import sub as re_sub
             start                       =   self.T.time.time()
 
             g                           =   self.T.GC.login(self.username, self.pw)
@@ -193,7 +195,7 @@ class Google:
             qry                         =   """ select count(*)>0 c from information_schema.tables
                                                 WHERE table_name = 'gmail'
                                             """
-            if not self.T.pd.read_sql(qry,self.T.eng).c[0]==True:
+            if not self.T.pd.read_sql(qry,self.T.sys_eng).c[0]==True:
                 self._make_pgsql_tbl(       )
 
 
@@ -202,7 +204,7 @@ class Google:
             df['g_uid']                 =   df.msg.map(lambda m: int(m.uid))
 
             qry                         =   "select all_mail_uid from gmail"
-            pdf                         =   self.T.pd.read_sql(qry,self.T.eng)
+            pdf                         =   self.T.pd.read_sql(qry,self.T.sys_eng)
             pg_all_mail_uids            =   pdf.all_mail_uid.tolist()
 
             df['skip']                  =   df.g_uid.isin(pg_all_mail_uids)
@@ -225,10 +227,12 @@ class Google:
 
                 cmd                     =   unicode("",encoding='utf8',errors='ignore')
                 for i in range(msg_num):
-                    D                   =   {'orig_msg'     :   msgs_as_json[i].replace("'","''"),
+                    D                   =   {'orig_msg'     :   msgs_as_json[i],
                                              'all_mail_uid' :   all_mail_uids[i],
                                              'g_msg_id'     :   g_msg_ids[i],
                                              'msg_id'       :   msg_ids[i]}
+
+
                     upsert              =   """
                         INSERT into gmail (
                             orig_msg,
@@ -236,7 +240,7 @@ class Google:
                             g_msg_id,
                             msg_id
                             )
-                        SELECT '%(orig_msg)s'::jsonb,%(all_mail_uid)s,%(g_msg_id)s,'%(msg_id)s'
+                        SELECT to_json($txt$%(orig_msg)s$txt$::text)::jsonb,%(all_mail_uid)s,%(g_msg_id)s,'%(msg_id)s'
                         FROM
                             (
                             SELECT array_agg(all_mail_uid) all_uids FROM gmail
@@ -261,10 +265,12 @@ class Google:
                             --OR all_m_ids is null
                             )
                         ;
-                        """%D
+                        """
+                    _out                = upsert % D
+                    _out = re_sub(r'[^\x00-\x7F]+',' ', _out)
+                    cmd                +=   unicode(self.T.codecs.encode(_out,'ascii','ignore'),errors='ignore')
+                    # cmd                +=   unicode(upsert,errors='ignore') if type(upsert) is not unicode else upsert
 
-                    # cmd                +=   unicode(self.T.codecs.encode(upsert,'ascii','ignore'),errors='ignore')
-                    cmd                +=   unicode(upsert,errors='ignore') if type(upsert) is not unicode else upsert
 
                 self.T.conn.set_isolation_level(0)
                 self.T.cur.execute(         cmd)
