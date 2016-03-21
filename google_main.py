@@ -22,7 +22,7 @@ class Google:
         locals().update(                        self.T.__dict__)
         # self.Google                         =   self
         # self.Voice                          =   self.Voice(self)
-        self.Gmail                          =   self.Gmail(self)
+        # self.Gmail                          =   self.Gmail(self)
 
     class Voice:
 
@@ -186,6 +186,9 @@ class Google:
             import json as J
             import yaml
             from re import sub as re_sub
+
+            import ipdb as I; I.set_trace()
+
             start                       =   self.T.time.time()
 
             g                           =   self.T.GC.login(self.username, self.pw)
