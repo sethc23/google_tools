@@ -228,13 +228,13 @@ class Google:
 
                 if method=='full':
                     if not self.PG.F.tables_exists('gmail'):
-                        self.PG.F.functions_create_batch_groups(sub_dir='sql_exts',
+                        self.PG.F.functions_create_batch_groups(sub_dir='../sql_exts',
                                                                 grps=['gmail_tables'],
                                                                 files=['1_gmail.sql'])
 
                 elif method=='quick':
                     if not self.PG.F.tables_exists('gmail_chk'):
-                        self.PG.F.functions_create_batch_groups(sub_dir='sql_exts',
+                        self.PG.F.functions_create_batch_groups(sub_dir='../sql_exts',
                                                                 grps=['gmail_tables'],
                                                                 files=['2_gmail_chk.sql'])
 
@@ -297,11 +297,12 @@ class Google:
                 for i in range(msg_num):
                     D                   =   {'all_mail_uid' :   all_mail_uids[i],
                                              'g_msg_id'     :   g_msg_ids[i],
-                                             'msg_id'       :   msg_ids[i]}
+                                             'msg_id'       :   msg_ids[i],
+                                             'UPDATE_TABLE' :   'gmail_chk'}
 
 
                     upsert              =   """
-                        INSERT into gmail_chk (
+                        INSERT into %(UPDATE_TABLE)s (
                             all_mail_uid,
                             g_msg_id,
                             msg_id
@@ -309,14 +310,14 @@ class Google:
                         SELECT %(all_mail_uid)s,%(g_msg_id)s,'%(msg_id)s'
                         FROM
                             (
-                            SELECT array_agg(all_mail_uid) all_uids FROM gmail
+                            SELECT array_agg(all_mail_uid) all_uids FROM %(UPDATE_TABLE)s
                             ) as f1,
                             (
-                            SELECT array_agg(g_msg_id) all_g_m_ids FROM gmail
+                            SELECT array_agg(g_msg_id) all_g_m_ids FROM %(UPDATE_TABLE)s
                             ) as f2
                             -- msg_id ignored as sampling showed such value was not unique to each msg
                             -- (
-                            -- SELECT array_agg(msg_id) all_m_ids FROM gmail
+                            -- SELECT array_agg(msg_id) all_m_ids FROM %(UPDATE_TABLE)s
                             -- ) as f3
                         WHERE
                             (
@@ -327,8 +328,7 @@ class Google:
                             (
                                all_uids is null
                             OR all_g_m_ids is null
-                            )
-                        ;
+                            );
                         """
                     _out                =   upsert % D
                     _out                =   re_sub(r'[^\x00-\x7F]+',' ', _out)
@@ -339,26 +339,26 @@ class Google:
                 self.T.conn.set_isolation_level(0)
                 self.T.cur.execute(         cmd)
 
-            import ipdb as I; I.set_trace()
-
             start                       =   self.T.time.time()
 
-            g                           =   self.T.GC.login(self.username, self.pw)
+            g                           =   self.T.GC.login(self.T.config.gmail.username, 
+                                                            self.T.config.gmail.pw)
             all_mail                    =   g.all_mail().mail()
 
-            # CONFIRM gmail table exists
-            qry                         =   """ select count(*)>0 c from information_schema.tables
-                                                WHERE table_name = 'gmail'
-                                            """
-            if not self.T.pd.read_sql(qry,self.T.eng).c[0]==True:
-                self._make_pgsql_tbl(       )
-
+            check_setup(                    method)
 
             # START PROCESSING FROM WHERE PREVIOUS PROCESSING ENDED
             df                          =   self.T.pd.DataFrame(data={'msg':all_mail})
             df['g_uid']                 =   df.msg.map(lambda m: int(m.uid))
 
-            qry                         =   "select all_mail_uid from gmail"
+            if method=='full':
+                UPDATE_TABLE            =   'gmail'
+                UPDATE_COUNT            =   25
+            elif method=='quick':
+                UPDATE_TABLE            =   'gmail_chk'
+                UPDATE_COUNT            =   500
+
+            qry                         =   "select all_mail_uid from %s" % UPDATE_TABLE
             pdf                         =   self.T.pd.read_sql(qry,self.T.eng)
             pg_all_mail_uids            =   pdf.all_mail_uid.tolist()
 
@@ -366,11 +366,11 @@ class Google:
 
             remaining_msgs              =   df[df.skip==False].msg.tolist()
 
-            m                           =   self._fetch_msg_grp(remaining_msgs,25)
+            M                           =   self._fetch_msg_grp(remaining_msgs,UPDATE_COUNT)
 
             while True:
                 try:
-                    msg_grp                 =   m.next()
+                    msg_grp             =   M.next()
                 except StopIteration:
                     break
                 msg_num                 =   len(msg_grp)
@@ -379,10 +379,10 @@ class Google:
                 g_msg_ids               =   map(lambda m: int(m['message_id']),msgs_as_dict)
                 msg_ids                 =   map(lambda m: self._get_msg_ids(m),msgs_as_dict)
 
-                
-                full_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
-                quick_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
-            
+                if method=='full':
+                    full_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
+                elif method=='quick':
+                    quick_sync(msg_num,all_mail_uids,g_msg_ids,msg_ids)
 
             end                         =   self.T.time.time()
             print 'total time (seconds):',end-start
