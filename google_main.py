@@ -356,15 +356,19 @@ class Google:
                 UPDATE_COUNT            =   25
             elif method=='quick':
                 UPDATE_TABLE            =   'gmail_chk'
-                UPDATE_COUNT            =   500
+                UPDATE_COUNT            =   25
 
             qry                         =   "select all_mail_uid from %s" % UPDATE_TABLE
             pdf                         =   self.T.pd.read_sql(qry,self.T.eng)
             pg_all_mail_uids            =   pdf.all_mail_uid.tolist()
 
-            df['skip']                  =   df.g_uid.isin(pg_all_mail_uids)
+            # df['cnt'] = ndf.msg.map(lambda s: pg_all_mail_uids.count(s))
 
-            remaining_msgs              =   df[df.skip==False].msg.tolist()
+
+            idx                         =   df[df.g_uid.isin(pg_all_mail_uids)].index.tolist()
+            df                          =   df.drop(idx,axis=0).reset_index(drop=True)
+
+            remaining_msgs              =   df.msg.tolist()
 
             M                           =   self._fetch_msg_grp(remaining_msgs,UPDATE_COUNT)
 
@@ -374,6 +378,7 @@ class Google:
                 except StopIteration:
                     break
                 msg_num                 =   len(msg_grp)
+
                 msgs_as_dict            =   map(lambda m: m.__dict__,msg_grp)
                 all_mail_uids           =   map(lambda m: m.uid, msg_grp)
                 g_msg_ids               =   map(lambda m: int(m['message_id']),msgs_as_dict)
