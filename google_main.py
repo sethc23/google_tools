@@ -23,12 +23,12 @@ class Google:
 
 
         if not _parent or not hasattr(_parent,'T'):
-            from System_Control                 import System_Lib
-            self.T                          =   System_Lib().T
+            from syscontrol.sys_lib         import sys_lib
+            self.T                          =   sys_lib().T
         else:
             self.T                          =   _parent.T
-            from System_Control                 import System_Reporter
-            self.Reporter                   =   System_Reporter(self)
+            from syscontrol.sys_reporter    import sys_reporter
+            self.Reporter                   =   sys_reporter(self)
 
 
         for k in kwargs.keys():
@@ -44,7 +44,7 @@ class Google:
                 self.pw                         =   self.T.pw
 
 
-        if self.T.config.gmail._has_key('attachments_dir'):
+        if hasattr(self.T,'config') and self.T.config.gmail._has_key('attachments_dir'):
                 attachments_path            =   self.T.config.gmail.attachments_dir.replace('~/','%s/' % self.T.os.environ['HOME'])
         else:
             attachments_path                =   self.T.os.environ['HOME'] + '/.gmail/attachments/'
@@ -68,14 +68,24 @@ class Google:
 
             self                            =   _parent.T.To_Sub_Classes(self,_parent)
 
+            import googlevoice as GV
+
             # self._parent                    =   _parent
             # self.T                          =   _parent.T
 
             # self.Voice                      =   self
-            # from googlevoice                import Voice
+            from googlevoice                import Voice
+            username = "seth.t.chase"
+            from getpass import getpass
+            pw = getpass('Password for the "%s" account: ' % username)
+
             # from googlevoice.util           import input
             # self.Voice                      =   Voice()
-            # self.Voice.login(                   )
+            self.Voice.login(                   )
+
+            self.T                          =   self.T.To_Class_Dict(  self,
+                                                            dict_list=[self.T.__dict__,locals()],
+                                                            update_globals=True)
 
         def _msg(self,phone_num,msg):
             # _out                        =   self.Voice.send_sms(phone_num, msg)
