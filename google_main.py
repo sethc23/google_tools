@@ -6,6 +6,26 @@ except:
     pass
 
 class Google:
+    """
+    arg1: 
+        an object of the To_Class (i.e., $BD/py_classes/sql/py_classes) 
+        possibly having attrbutes
+
+            'T' : an instance object providing all variable and library reference points,
+                i.e., ~/.scripts/syscontrol/syslib, which may include:
+                    'config' and/or config.gmail.attachments_dir
+        and
+
+            'PG' : an instance object providing reference points for all methods in pg_classes,
+                i.e., $BD/pgsql/pg_classes
+    
+    kwargs:
+        'username' : gmail username (not including '@gmail.com' suffix)
+        'pw' : gmail password, which can initially be included but, if not, 
+            user is prompted for pw without echoing and 
+            value stored only in local ram while script remains active.
+
+    """
 
     def __init__(self,_parent=None,**kwargs):
         from os                             import environ                  as os_environ
@@ -50,6 +70,7 @@ class Google:
             attachments_path                =   self.T.os.environ['HOME'] + '/.gmail/attachments/'
         if not self.T.os.path.exists(           attachments_path):
             self.T.os.mkdir(                    attachments_path)
+
 
 
         self.T                              =   self.T.To_Class_Dict(  self,
