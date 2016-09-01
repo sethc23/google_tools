@@ -7,23 +7,24 @@ except:
 
 class Google:
     """
-    arg1: 
-        an object of the To_Class (i.e., $BD/py_classes/sql/py_classes) 
-        possibly having attrbutes
 
-            'T' : an instance object providing all variable and library reference points,
-                i.e., ~/.scripts/syscontrol/syslib, which may include:
-                    'config' and/or config.gmail.attachments_dir
-        and
+        arg1: 
+            an object of the To_Class (i.e., $BD/py_classes/sql/py_classes) 
+            possibly having attrbutes
 
-            'PG' : an instance object providing reference points for all methods in pg_classes,
-                i.e., $BD/pgsql/pg_classes
-    
-    kwargs:
-        'username' : gmail username (not including '@gmail.com' suffix)
-        'pw' : gmail password, which can initially be included but, if not, 
-            user is prompted for pw without echoing and 
-            value stored only in local ram while script remains active.
+                'T' : an instance object providing all variable and library reference points,
+                    i.e., ~/.scripts/syscontrol/syslib, which may include:
+                        'config' and/or config.gmail.attachments_dir
+            and
+
+                'PG' : an instance object providing reference points for all methods in pg_classes,
+                    i.e., $BD/pgsql/pg_classes
+        
+        kwargs:
+            'username' : gmail username (not including '@gmail.com' suffix)
+            'pw' : gmail password, which can initially be included but, if not, 
+                user is prompted for pw without echoing and 
+                value stored only in local ram while script remains active.
 
     """
 
@@ -622,7 +623,212 @@ class Google:
             # //*[@id=":4c"] -- paste  a2547e2@mail.com
             # /html/body/div[30]/div[3]/button[1] --click
 
+class Calendar:
+
+    def __init__(self,_parent):
+        self                        =   _parent.T.To_Sub_Classes(self,_parent)
+        self.T                      =   _parent.T
+        self.svc_profile_name       =   'g_cal'
+        self.svc_name               =   'calendar'
+        self.svc                    =   None
+
+    def new_event(self,summary='Gym'):
+        if not self.svc:
+            self.svc = self._parent.start_user_service(self.svc_profile_name,self.svc_name)
+        service = self.svc
+        DT = self.T.DT
+        now = DT.datetime.utcnow()
+        event = {
+              'summary': summary,
+              'start': {
+                'dateTime': now.isoformat() + 'Z',
+                'timeZone': 'America/New_York',
+              },
+              'end': {
+                'dateTime': (now+DT.timedelta(minutes=90)).isoformat() + 'Z',
+                'timeZone': 'America/New_York',
+              }
+            }
+        event = service.events().insert(calendarId='primary', body=event).execute()
+        print('Event created: %s'%event.get('htmlLink'))
+
+class Sheets:
+    """
+
+        RESOURCES:
+            https://developers.google.com/sheets/reference/rest/
+
+    """
+
+    def __init__(self,_parent):
+        self                        =   _parent.T.To_Sub_Classes(self,_parent)
+        self.T                      =   _parent.T
+        self.svc_profile_name       =   'g_cal'
+        self.svc_name               =   'sheets'
+        self.svc                    =   None
+
+    def create(self,new_title,body={}):
+        if not self.svc:
+            self.svc = self._parent.start_user_service(self.svc_profile_name,self.svc_name)
+        svc = self.svc
+        if not body:
+            body = {
+                'spreadsheetId' : '',
+                'namedRanges' : '',
+                'properties' : '',
+                'sheets' : '',
+                    'sheetType' : '',
+                    'index' : '',
+                    'title' : '',
+                }
+
+class Drive:
+    """
+    
+        RESOURCES:
+            https://developers.google.com/drive/v3/reference/
+
+    """
+
+    def __init__(self,_parent):
+        self                        =   _parent.T.To_Sub_Classes(self,_parent)
+        self.T                      =   _parent.T
+        self.svc_profile_name       =   'g_cal'
+        self.svc_name               =   'drive'
+        self.svc                    =   None
+
+    def get_list_of_all_files(self,limit=0):
+        """ Retrieve a list of File resources.
+
+            Args:
+            service: Drive API service instance.
+            Returns:
+            List of File resources.
+        """
+        if not self.svc:
+            self.svc = self._parent.start_user_service(self.svc_profile_name,self.svc_name)
+        service = self.svc
+        T = self.T
+
+        result = []
+        page_token = None
+        while True:
+            try:
+                param = {}
+                if page_token:
+                    param['pageToken'] = page_token
+                res = service.files().list(**param).execute()
+
+                result.extend(res['files'])
+                if res.has_key('nextPageToken'):
+                    page_token = res.get('nextPageToken')
+                    if not page_token:
+                        break
+                if limit:
+                    if len(result)>=limit:
+                        break
+            except T.errors.HttpError, error:
+                print 'An error occurred: %s' % error
+                break
+        return result
 
 
+class Google_API:
+
+    def __init__(self):
+        import                                  os,sys,httplib2,requests
+        # import                                  streaming_httplib2      as httplib2
+        from apiclient.discovery            import build
+        from oauth2client.file              import Storage
+        from oauth2client.client            import flow_from_clientsecrets,OAuth2WebServerFlow
+
+        from apiclient                      import errors
+
+        from __settings__                   import get_creds
+
+        sys.path.append(                        os.path.join(os.environ['HOME'],'.scripts'))
+        from py_classes                     import To_Class,To_Class_Dict,To_Sub_Classes
+        self.T                              =   To_Class_Dict(  self,
+                                                                dict_list=[locals()],
+                                                                update_globals=True)
+
+    def build_service(self,service):
+        """
+            Services: mapsengine,fusiontables,drive,gmail,calendar
+        """
+        T = getattr( getattr(self,service) , 'config' )
+        if service=='mapsengine':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/mapsengine"
+            T.API_SERVICE_NAME = "mapsengine"
+            T.API_VERSION = "v1"
+
+        elif service=='fusiontables':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/fusiontables"
+            T.API_SERVICE_NAME = "fusiontables"
+            T.API_VERSION = "v2"
+
+        elif service=='drive':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/drive"
+            T.API_SERVICE_NAME = "drive"
+            T.API_VERSION = "v3"
+        
+        elif service=='gmail':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+            T.API_SERVICE_NAME = "gmail"
+            T.API_VERSION = "v1"
+        
+        elif service=='calendar':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar"
+            T.API_SERVICE_NAME = "calendar"
+            T.API_VERSION = "v3"
+
+        elif service=='sheets':
+            T.OAUTH_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+            T.API_SERVICE_NAME = "sheets"
+            T.API_VERSION = "v4"
 
 
+        storage = self.T.Storage(T.STORAGE_FILE)
+        credentials = storage.get()
+        if credentials is None or credentials.invalid:
+            #flow = flow_from_clientsecrets(CLIENT_SECRET_FILE,
+            #                               scope=OAUTH_SCOPE)
+            #                               redirect_uri=REDIRECT_URI)
+
+            # Run through the OAuth flow and retrieve credentials
+            flow = self.T.OAuth2WebServerFlow(
+                                        T.CLIENT_ID, 
+                                        T.CLIENT_SECRET, 
+                                        T.OAUTH_SCOPE,
+                                        redirect_uri=T.REDIRECT_URI)
+
+            authorize_url = flow.step1_get_authorize_url()
+            print 'Go to the following link in your browser: ' + authorize_url
+            code = raw_input('Enter verification code: ').strip()
+            credentials = flow.step2_exchange(code)
+
+            storage = self.T.Storage(T.STORAGE_FILE)
+            storage.put(credentials)
+
+            
+        return self.T.build(    T.API_SERVICE_NAME,
+                                T.API_VERSION,
+                                http = credentials.authorize(
+                                            self.T.httplib2.Http(  
+                                                            ca_certs="/opt/local/share/curl/curl-ca-bundle.crt",
+                                                            disable_ssl_certificate_validation = True)),
+                                developerKey=T.API_KEY)
+
+    def start_user_service(self,app_user,service):
+        creds = self.T.get_creds(app_user)
+        if creds:
+            setattr( self, service, self.T.To_Class() )
+            svc = getattr(self,service)
+            svc.config = self.T.To_Class( creds )
+            svc.config.STORAGE_FILE = 'api_creds__%s__%s.json' % (app_user,service)
+            locals().update(creds)
+            return self.build_service(service)
+        else:
+            return False
+
+    

@@ -2,6 +2,7 @@
 gmail/*.txt
 */__pycache__
 *.idea/
-__init__.pyc
-__settings__.pyc
-google_main.pyc
+*.pyc
+__settings__.py
+creds
+pydoc-sheets-create
